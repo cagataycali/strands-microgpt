@@ -17,3 +17,4 @@ venv/
 site/
 *.checkpoint.json
 input.txt
+site/
