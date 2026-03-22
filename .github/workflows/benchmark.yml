@@ -1,0 +1,155 @@
+name: Benchmark
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+    branches: [main]
+
+permissions:
+  contents: write
+  pull-requests: write
+
+jobs:
+  benchmark:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+
+      - name: Install
+        run: pip install -e .
+
+      - name: Run benchmark
+        run: |
+          python benchmarks/benchmark.py \
+            --steps 200 \
+            --configs v1,v2,v2_bigram \
+            --output benchmark_results.json
+
+      - name: Generate summary
+        if: always()
+        id: summary
+        run: |
+          python -c "
+          import json, os
+
+          with open('benchmark_results.json') as f:
+              data = json.load(f)
+
+          results = data['results']
+          comp = data.get('comparison', {})
+
+          # Build markdown table
+          lines = []
+          lines.append('## 🏌️ MicroGPT Benchmark Results')
+          lines.append('')
+          lines.append(f'**Dataset**: {data[\"dataset\"][\"name\"]} ({data[\"dataset\"][\"num_docs\"]} docs, vocab={data[\"dataset\"][\"vocab_size\"]})')
+          lines.append(f'**Steps**: {data[\"hyperparameters\"][\"steps\"]} | **LR**: {data[\"hyperparameters\"][\"learning_rate\"]} | **n_embd**: {data[\"hyperparameters\"][\"n_embd\"]} | **n_layer**: {data[\"hyperparameters\"][\"n_layer\"]}')
+          lines.append('')
+          lines.append('| Config | Params | Final Loss | BPB | Efficiency | Convergence | Techniques |')
+          lines.append('|--------|-------:|----------:|----:|----------:|:-----------:|------------|')
+
+          for r in results:
+              params = f\"{r['num_params']:,}\"
+              loss = f\"{r['losses']['final']:.4f}\"
+              bpb = f\"{r['losses']['bpb']:.4f}\"
+              eff = f\"{r['efficiency']['loss_x_params']:.0f}\"
+              conv = f\"{r['losses']['steps_to_3.0']}\"
+              techs = ', '.join(r['techniques'][:4])
+              if len(r['techniques']) > 4:
+                  techs += f' +{len(r[\"techniques\"])-4}'
+              lines.append(f'| **{r[\"label\"]}** | {params} | {loss} | {bpb} | {eff} | {conv} steps | {techs} |')
+
+          if comp:
+              lines.append('')
+              lines.append('### v2 vs v1 Comparison')
+              lines.append('')
+
+              loss_icon = '✅' if comp.get('v2_better_loss') else '❌'
+              param_icon = '✅' if comp.get('v2_fewer_params') else '❌'
+              eff_icon = '✅' if comp.get('v2_better_efficiency') else '❌'
+              conv_icon = '✅' if comp.get('v2_faster_convergence') else '⚪'
+
+              lines.append(f'| Metric | Result |')
+              lines.append(f'|--------|--------|')
+              lines.append(f'| {loss_icon} Loss improvement | **{comp.get(\"loss_improvement_pct\", 0):+.1f}%** |')
+              lines.append(f'| {param_icon} Param savings | **{comp.get(\"param_savings_pct\", 0):+.1f}%** ({comp.get(\"param_savings\", 0):,} fewer) |')
+              lines.append(f'| {eff_icon} Better efficiency (loss×params) | **{comp.get(\"efficiency_improvement\", 0):+.0f}** |')
+              lines.append(f'| {conv_icon} Faster convergence | steps to 3.0: v2 faster by **{max(0, comp.get(\"v2_faster_convergence\", 0))}** |')
+
+              if comp.get('v2_better_efficiency'):
+                  lines.append('')
+                  lines.append('> ✅ **v2 Parameter Golf is more efficient than baseline.**')
+              else:
+                  lines.append('')
+                  lines.append('> ❌ **REGRESSION: v2 is less efficient than baseline!**')
+
+          # Loss curves
+          lines.append('')
+          lines.append('<details><summary>📈 Loss Curves (sampled)</summary>')
+          lines.append('')
+          for r in results:
+              curve = r['losses']['curve']
+              lines.append(f'**{r[\"label\"]}**: {\" → \".join(f\"{l:.2f}\" for l in curve[:10])}')
+          lines.append('')
+          lines.append('</details>')
+
+          # Generation examples
+          lines.append('')
+          lines.append('<details><summary>🎲 Generation Examples</summary>')
+          lines.append('')
+          for r in results:
+              examples = r['generation']['examples']
+              unique = r['generation']['unique_ratio']
+              lines.append(f'**{r[\"label\"]}** (unique: {unique:.0%}): {\", \".join(examples[:5])}')
+          lines.append('')
+          lines.append('</details>')
+
+          md = '\n'.join(lines)
+
+          # Write to file and GITHUB_OUTPUT
+          with open('benchmark_summary.md', 'w') as f:
+              f.write(md)
+
+          # Write to GitHub step summary
+          summary_path = os.environ.get('GITHUB_STEP_SUMMARY', '')
+          if summary_path:
+              with open(summary_path, 'a') as f:
+                  f.write(md + '\n')
+
+          print(md)
+          "
+
+      - name: Comment on PR
+        if: github.event_name == 'pull_request'
+        uses: marocchino/sticky-pull-request-comment@v2
+        with:
+          header: benchmark
+          path: benchmark_summary.md
+
+      - name: Upload results
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: benchmark-results-${{ github.sha }}
+          path: |
+            benchmark_results.json
+            benchmark_summary.md
+
+      - name: Store historical result
+        if: github.ref == 'refs/heads/main'
+        run: |
+          mkdir -p benchmark_history
+          cp benchmark_results.json "benchmark_history/$(date +%Y%m%d_%H%M%S)_${GITHUB_SHA:0:8}.json"
+
+      - name: Upload history
+        if: github.ref == 'refs/heads/main'
+        uses: actions/upload-artifact@v4
+        with:
+          name: benchmark-history
+          path: benchmark_history/
+          retention-days: 90

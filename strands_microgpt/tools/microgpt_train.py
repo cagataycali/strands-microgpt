@@ -24,10 +24,23 @@ def microgpt_train(
     learning_rate: float = 0.01,
     seed: int = 42,
     checkpoint_path: str = "",
+    tie_embeddings: bool = True,
+    use_rope: bool = True,
+    use_bigram_hash: bool = False,
 ) -> Dict[str, Any]:
     """Train Karpathy's pure-Python GPT from scratch on a text dataset.
 
     Zero dependencies. Pure autograd. The complete algorithm in Python.
+
+    v2 enhancements from OpenAI Parameter Golf winners:
+    - ReLU² activation (smoother gradients)
+    - GQA (Grouped-Query Attention)
+    - Tied embeddings (input/output share weights)
+    - RoPE (Rotary Position Embeddings)
+    - U-Net skip connections
+    - Logit soft-capping (cap=30.0)
+    - Cosine warmdown LR + gradient clipping
+    - Learnable residual scales
 
     Args:
         dataset_url: URL to download dataset (default: names.txt).
@@ -40,6 +53,9 @@ def microgpt_train(
         learning_rate: Initial learning rate.
         seed: Random seed.
         checkpoint_path: Path to save checkpoint after training.
+        tie_embeddings: Share input/output embedding matrix.
+        use_rope: Use RoPE instead of learned position embeddings.
+        use_bigram_hash: Enable BigramHash embedding (winner's technique).
 
     Returns:
         Dict with training stats, loss history, and sample generations.
@@ -60,12 +76,16 @@ def microgpt_train(
             block_size=block_size,
             n_head=n_head,
             seed=seed,
+            tie_embeddings=tie_embeddings,
+            use_rope=use_rope,
+            use_bigram_hash=use_bigram_hash,
         )
 
         info = (
-            f"Training MicroGPT: {model.num_params} params, "
+            f"Training MicroGPT v2: {model.num_params} params, "
             f"{len(docs)} docs, {num_steps} steps, "
-            f"n_layer={n_layer}, n_embd={n_embd}, n_head={n_head}"
+            f"n_layer={n_layer}, n_embd={n_embd}, "
+            f"n_head={n_head}Q/{model.n_kv_head}KV"
         )
         logger.info(info)
 
@@ -99,9 +119,13 @@ def microgpt_train(
             },
         )
 
+        techniques = ", ".join(model.techniques)
+
         result_text = (
-            f"✅ MicroGPT trained successfully!\n"
+            f"✅ MicroGPT v2 trained successfully!\n"
             f"  Params: {model.num_params}\n"
+            f"  Heads: {model.n_head}Q / {model.n_kv_head}KV (GQA)\n"
+            f"  Techniques: {techniques}\n"
             f"  Dataset: {len(docs)} documents\n"
             f"  Steps: {num_steps}\n"
             f"  Final loss: {losses[-1]:.4f}\n"

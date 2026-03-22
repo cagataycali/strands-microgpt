@@ -20,6 +20,7 @@ def microgpt_generate(
 
     Loads a previously trained model and generates new samples.
     No training occurs — this is pure inference.
+    Supports both v1 and v2 checkpoint formats.
 
     Args:
         checkpoint_path: Path to the model checkpoint.
@@ -57,10 +58,16 @@ def microgpt_generate(
             temperature=temperature,
         )
 
+        version = metadata.get("version", "v1")
+        techniques = metadata.get("techniques", [])
+        techniques_str = f"  Techniques: {', '.join(techniques)}\n" if techniques else ""
+
         result_text = (
             f"Generated {num_samples} samples (temperature={temperature}):\n"
-            f"  Model: {model.num_params} params, "
-            f"n_layer={model.n_layer}, n_embd={model.n_embd}\n\n"
+            f"  Model ({version}): {model.num_params} params, "
+            f"n_layer={model.n_layer}, n_embd={model.n_embd}, "
+            f"{model.n_head}Q/{model.n_kv_head}KV\n"
+            f"{techniques_str}\n"
         )
         for i, s in enumerate(samples, 1):
             result_text += f"  {i:2d}. {s}\n"

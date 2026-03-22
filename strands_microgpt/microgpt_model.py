@@ -76,6 +76,10 @@ class MicroGPTModel(Model):
         n_embd: int
         block_size: int
         n_head: int
+        n_kv_head: Optional[int]
+        tie_embeddings: bool
+        use_rope: bool
+        use_bigram_hash: bool
         learning_rate: float
         temperature: float
         num_samples: int
@@ -102,6 +106,10 @@ class MicroGPTModel(Model):
             "n_embd": 16,
             "block_size": 16,
             "n_head": 4,
+            "n_kv_head": None,
+            "tie_embeddings": True,
+            "use_rope": True,
+            "use_bigram_hash": False,
             "learning_rate": 0.01,
             "temperature": 0.5,
             "num_samples": 20,
@@ -138,6 +146,10 @@ class MicroGPTModel(Model):
             n_embd=self.config["n_embd"],
             block_size=self.config["block_size"],
             n_head=self.config["n_head"],
+            n_kv_head=self.config.get("n_kv_head"),
+            tie_embeddings=self.config.get("tie_embeddings", True),
+            use_rope=self.config.get("use_rope", True),
+            use_bigram_hash=self.config.get("use_bigram_hash", False),
             seed=self.config["seed"],
         )
 
