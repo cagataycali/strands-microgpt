@@ -10,6 +10,7 @@ from strands_microgpt.engine import (
     _relu_squared,
 )
 
+
 # =============================================================================
 # Autograd: tanh
 # =============================================================================
@@ -196,8 +197,8 @@ def test_softcap_clamps_logits():
     keys = [[] for _ in range(1)]
     values = [[] for _ in range(1)]
     logits = model.forward(0, 0, keys, values)
-    for logit in logits:
-        assert abs(logit.data) <= 30.0 + 0.01  # bounded by cap
+    for l in logits:
+        assert abs(l.data) <= 30.0 + 0.01  # bounded by cap
 
 
 def test_softcap_disabled():

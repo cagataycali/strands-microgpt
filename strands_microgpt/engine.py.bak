@@ -572,7 +572,7 @@ class MicroGPT:
         # Logit soft-capping (from all top submissions: cap=30.0)
         if self.logit_softcap > 0:
             cap = self.logit_softcap
-            logits = [Value(cap) * (logit / cap).tanh() for logit in logits]
+            logits = [Value(cap) * (l / cap).tanh() for l in logits]
 
         return logits
 
