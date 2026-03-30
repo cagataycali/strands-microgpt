@@ -354,7 +354,7 @@ def test_checkpoint_v2_roundtrip(tmp_path):
     assert model2.n_kv_head == model.n_kv_head
     assert model2.tie_embeddings == model.tie_embeddings
     assert model2.use_rope == model.use_rope
-    assert meta["version"] == "v2-parameter-golf"
+    assert meta["version"] == "v3-parameter-golf"
     assert meta["test"] is True
     assert "RoPE" in meta["techniques"]
 
@@ -373,7 +373,7 @@ def test_techniques_list():
     assert "RoPE" in t
     assert "TiedEmbed" in t
     assert "GQA(2kv)" in t
-    assert "ReLU²" in t
+    assert any("ReLU" in tech for tech in t)  # ReLU² or LeakyReLU²(0.5)
     assert "U-Net" in t
     assert "SoftCap" in t
     assert "GradClip" in t

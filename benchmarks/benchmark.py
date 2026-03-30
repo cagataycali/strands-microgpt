@@ -69,6 +69,11 @@ V1_CONFIG = {
     "use_rope": False,
     "use_bigram_hash": False,
     "logit_softcap": 0.0,  # disabled
+    "use_leaky_relu": False,  # v1: plain ReLU²
+    "use_resid_mix": False,   # v1: no residual mixing
+    "use_smear_gate": False,  # v1: no SmearGate
+    "weight_decay": 0.0,     # v1: no weight decay
+    "warmup_steps": 0,       # v1: no warmup
 }
 
 # v2: all Parameter Golf techniques enabled
@@ -79,6 +84,11 @@ V2_CONFIG = {
     "use_rope": True,
     "use_bigram_hash": False,  # keep fair — bigram adds extra params
     "logit_softcap": 30.0,
+    "use_leaky_relu": False,  # v2: plain ReLU²
+    "use_resid_mix": False,   # v2: no residual mixing
+    "use_smear_gate": False,  # v2: no SmearGate
+    "weight_decay": 0.0,     # v2: no weight decay
+    "warmup_steps": 0,       # v2: no warmup
 }
 
 # v2+bigram: v2 with BigramHash (for completeness)
@@ -89,6 +99,47 @@ V2_BIGRAM_CONFIG = {
     "use_rope": True,
     "use_bigram_hash": True,
     "logit_softcap": 30.0,
+    "use_leaky_relu": False,  # v2: plain ReLU²
+    "use_resid_mix": False,   # v2: no residual mixing
+    "use_smear_gate": False,  # v2: no SmearGate
+    "weight_decay": 0.0,     # v2: no weight decay
+    "warmup_steps": 0,       # v2: no warmup
+}
+
+# v3: Parameter Golf v3 — winning combo (WD=0.04)
+# Weight decay is the #1 improvement from Parameter Golf for pure-Python:
+# - Regularizes weights → better generalization
+# - From SmearGate/OrthoInit/MuonWD submission: WD=0.04 was optimal
+# - LeakyReLU² available but optional (scale-dependent)
+V3_CONFIG = {
+    **SHARED,
+    "n_kv_head": 2,        # GQA: half KV heads
+    "tie_embeddings": True,
+    "use_rope": True,
+    "use_bigram_hash": False,
+    "logit_softcap": 30.0,
+    "use_leaky_relu": False,  # scale-dependent, enable for larger models
+    "leaky_relu_slope": 0.5,
+    "use_smear_gate": False,
+    "use_resid_mix": False,  
+    "weight_decay": 0.04,    # from Parameter Golf: optimal WD
+    "warmup_steps": 0,
+}
+
+# v3+smeargate: v3 with SmearGate
+V3_SMEARGATE_CONFIG = {
+    **SHARED,
+    "n_kv_head": 2,
+    "tie_embeddings": True,
+    "use_rope": True,
+    "use_bigram_hash": False,
+    "logit_softcap": 30.0,
+    "use_leaky_relu": True,
+    "leaky_relu_slope": 0.5,
+    "use_smear_gate": True,
+    "use_resid_mix": True,
+    "weight_decay": 0.01,
+    "warmup_steps": 10,
 }
 
 
@@ -208,8 +259,8 @@ def main():
                         help="Path to dataset file (default: download names.txt)")
     parser.add_argument("--output", type=str, default=None,
                         help="Output JSON file (default: stdout)")
-    parser.add_argument("--configs", type=str, default="v1,v2,v2_bigram",
-                        help="Comma-separated configs to run (default: v1,v2,v2_bigram)")
+    parser.add_argument("--configs", type=str, default="v1,v2,v3",
+                        help="Comma-separated configs to run (default: v1,v2,v3)")
     args = parser.parse_args()
 
     # Load data
@@ -223,6 +274,8 @@ def main():
         "v1": ("v1-baseline", V1_CONFIG),
         "v2": ("v2-parameter-golf", V2_CONFIG),
         "v2_bigram": ("v2-parameter-golf+bigram", V2_BIGRAM_CONFIG),
+        "v3": ("v3-parameter-golf", V3_CONFIG),
+        "v3_smeargate": ("v3-parameter-golf+smeargate", V3_SMEARGATE_CONFIG),
     }
 
     results = []
